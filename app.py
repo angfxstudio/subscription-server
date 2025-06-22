@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from datetime import datetime
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # 🔐 Dummy License Database
 licenses = {
