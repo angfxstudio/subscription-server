@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import Flask, request, session, redirect, url_for, flash, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, session, redirect, url_for, flash, jsonify, render_template_string
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, DateField, BooleanField
 from wtforms.validators import DataRequired
@@ -122,159 +122,149 @@ layout = """
 """
 
 login_tpl = """
-{% extends layout %}
-{% block content %}
-    <h2>Admin Login</h2>
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        <div>
-            {{ form.username.label }}<br>
-            {{ form.username(size=32) }}
-        </div>
-        <div>
-            {{ form.password.label }}<br>
-            {{ form.password(size=32) }}
-        </div>
-        <div>
-            {{ form.submit() }}
-        </div>
-    </form>
-{% endblock %}
+<h2>Admin Login</h2>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div>
+        {{ form.username.label }}<br>
+        {{ form.username(size=32) }}
+    </div>
+    <div>
+        {{ form.password.label }}<br>
+        {{ form.password(size=32) }}
+    </div>
+    <div>
+        {{ form.submit() }}
+    </div>
+</form>
 """
 
 dashboard_tpl = """
-{% extends layout %}
-{% block content %}
-    <h2>Dashboard</h2>
-    <ul>
-        <li><a href="{{ url_for('licenses') }}">Manage Licenses</a></li>
-        <li><a href="{{ url_for('tools') }}">Manage Tools</a></li>
-    </ul>
-    <h3>License Stats</h3>
-    <ul>
-        <li>Total Licenses: {{ license_count }}</li>
-        <li>Active: {{ active_count }}, Expired: {{ expired_count }}</li>
-        <li>Tools: {{ tool_count }}</li>
-    </ul>
-{% endblock %}
+<h2>Dashboard</h2>
+<ul>
+    <li><a href="{{ url_for('licenses') }}">Manage Licenses</a></li>
+    <li><a href="{{ url_for('tools') }}">Manage Tools</a></li>
+</ul>
+<h3>License Stats</h3>
+<ul>
+    <li>Total Licenses: {{ license_count }}</li>
+    <li>Active: {{ active_count }}, Expired: {{ expired_count }}</li>
+    <li>Tools: {{ tool_count }}</li>
+</ul>
 """
 
 licenses_tpl = """
-{% extends layout %}
-{% block content %}
-    <h2>Licenses</h2>
-    <a href="{{ url_for('generate_license') }}"><button>Generate New License</button></a>
-    {% if soon_expiry %}
-        <div class="alert">
-            <strong>Expiring Soon:</strong>
-            <ul>
-            {% for lic in soon_expiry %}
-                <li>{{ lic.key }} (expires: {{ lic.expiry_date }})</li>
-            {% endfor %}
-            </ul>
-        </div>
-    {% endif %}
-    <table>
-        <tr>
-            <th>Key</th><th>Device ID</th><th>Version</th><th>Expiry</th><th>Active</th><th>Actions</th>
-        </tr>
-        {% for lic in licenses %}
-        <tr>
-            <td>{{ lic.key }}</td>
-            <td>{{ lic.device_id }}</td>
-            <td>{{ lic.version }}</td>
-            <td>{{ lic.expiry_date }}</td>
-            <td>{{ 'Yes' if lic.active else 'No' }}</td>
-            <td>
-                {% if lic.active %}
-                <form method="POST" action="{{ url_for('revoke_license', license_key=lic.key) }}" style="display:inline">
-                    <button type="submit">Revoke</button>
-                </form>
-                {% endif %}
-            </td>
-        </tr>
+<h2>Licenses</h2>
+<a href="{{ url_for('generate_license') }}"><button>Generate New License</button></a>
+{% if soon_expiry %}
+    <div class="alert">
+        <strong>Expiring Soon:</strong>
+        <ul>
+        {% for lic in soon_expiry %}
+            <li>{{ lic.key }} (expires: {{ lic.expiry_date }})</li>
         {% endfor %}
-    </table>
-{% endblock %}
+        </ul>
+    </div>
+{% endif %}
+<table>
+    <tr>
+        <th>Key</th><th>Device ID</th><th>Version</th><th>Expiry</th><th>Active</th><th>Actions</th>
+    </tr>
+    {% for lic in licenses %}
+    <tr>
+        <td>{{ lic.key }}</td>
+        <td>{{ lic.device_id }}</td>
+        <td>{{ lic.version }}</td>
+        <td>{{ lic.expiry_date }}</td>
+        <td>{{ 'Yes' if lic.active else 'No' }}</td>
+        <td>
+            {% if lic.active %}
+            <form method="POST" action="{{ url_for('revoke_license', license_key=lic.key) }}" style="display:inline">
+                <button type="submit">Revoke</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
 """
 
 license_generate_tpl = """
-{% extends layout %}
-{% block content %}
-    <h2>Generate New License</h2>
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        <div>
-            {{ form.device_id.label }}<br>
-            {{ form.device_id(size=40) }}
-        </div>
-        <div>
-            {{ form.version.label }}<br>
-            {{ form.version(size=20) }}
-        </div>
-        <div>
-            {{ form.expiry_date.label }}<br>
-            {{ form.expiry_date() }}
-        </div>
-        <div>
-            {{ form.submit() }}
-        </div>
-    </form>
-{% endblock %}
+<h2>Generate New License</h2>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div>
+        {{ form.device_id.label }}<br>
+        {{ form.device_id(size=40) }}
+    </div>
+    <div>
+        {{ form.version.label }}<br>
+        {{ form.version(size=20) }}
+    </div>
+    <div>
+        {{ form.expiry_date.label }}<br>
+        {{ form.expiry_date() }}
+    </div>
+    <div>
+        {{ form.submit() }}
+    </div>
+</form>
 """
 
 tools_tpl = """
-{% extends layout %}
-{% block content %}
-    <h2>Tools</h2>
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        <div>
-            {{ form.name.label }}<br>
-            {{ form.name(size=30) }}
-        </div>
-        <div>
-            {{ form.version.label }}<br>
-            {{ form.version(size=15) }}
-        </div>
-        <div>
-            {{ form.download_url.label }}<br>
-            {{ form.download_url(size=60) }}
-        </div>
-        <div>
-            {{ form.update_required.label }} {{ form.update_required() }}
-        </div>
-        <div>
-            {{ form.submit() }}
-        </div>
-    </form>
-    <h3>Existing Tools</h3>
-    <table>
-        <tr>
-            <th>Name</th><th>Version</th><th>URL</th><th>Update Required</th><th>Actions</th>
-        </tr>
-        {% for tool in tools %}
-        <tr>
-            <td>{{ tool.name }}</td>
-            <td>{{ tool.version }}</td>
-            <td><a href="{{ tool.download_url }}" target="_blank">Download</a></td>
-            <td>{{ 'Yes' if tool.update_required else 'No' }}</td>
-            <td>
-                <form method="POST" action="{{ url_for('update_tool', tool_name=tool.name) }}" style="display:inline">
-                    <input type="text" name="version" value="{{ tool.version }}">
-                    <input type="text" name="download_url" value="{{ tool.download_url }}">
-                    <input type="checkbox" name="update_required" {% if tool.update_required %}checked{% endif %}>
-                    <button type="submit">Update</button>
-                </form>
-                <form method="POST" action="{{ url_for('delete_tool', tool_name=tool.name) }}" style="display:inline">
-                    <button type="submit">Delete</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-{% endblock %}
+<h2>Tools</h2>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div>
+        {{ form.name.label }}<br>
+        {{ form.name(size=30) }}
+    </div>
+    <div>
+        {{ form.version.label }}<br>
+        {{ form.version(size=15) }}
+    </div>
+    <div>
+        {{ form.download_url.label }}<br>
+        {{ form.download_url(size=60) }}
+    </div>
+    <div>
+        {{ form.update_required.label }} {{ form.update_required() }}
+    </div>
+    <div>
+        {{ form.submit() }}
+    </div>
+</form>
+<h3>Existing Tools</h3>
+<table>
+    <tr>
+        <th>Name</th><th>Version</th><th>URL</th><th>Update Required</th><th>Actions</th>
+    </tr>
+    {% for tool in tools %}
+    <tr>
+        <td>{{ tool.name }}</td>
+        <td>{{ tool.version }}</td>
+        <td><a href="{{ tool.download_url }}" target="_blank">Download</a></td>
+        <td>{{ 'Yes' if tool.update_required else 'No' }}</td>
+        <td>
+            <form method="POST" action="{{ url_for('update_tool', tool_name=tool.name) }}" style="display:inline">
+                <input type="text" name="version" value="{{ tool.version }}">
+                <input type="text" name="download_url" value="{{ tool.download_url }}">
+                <input type="checkbox" name="update_required" {% if tool.update_required %}checked{% endif %}>
+                <button type="submit">Update</button>
+            </form>
+            <form method="POST" action="{{ url_for('delete_tool', tool_name=tool.name) }}" style="display:inline">
+                <button type="submit">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
 """
+
+# ====== Template rendering helper ======
+def render_with_layout(content_tpl, **context):
+    full_template = layout.replace('{% block content %}{% endblock %}', content_tpl)
+    return render_template_string(full_template, **context)
 
 # ====== Routes ======
 @app.route('/')
@@ -294,7 +284,7 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password', 'danger')
-    return render_template_string(login_tpl, form=form, layout=layout)
+    return render_with_layout(login_tpl, form=form)
 
 @app.route('/logout')
 def logout():
@@ -310,7 +300,7 @@ def dashboard():
     now = datetime.now()
     expired_count = sum(1 for l in licenses if datetime.strptime(l['expiry_date'], '%Y-%m-%d') < now)
     active_count = sum(1 for l in licenses if l['active'] and datetime.strptime(l['expiry_date'], '%Y-%m-%d') >= now)
-    return render_template_string(dashboard_tpl, layout=layout,
+    return render_with_layout(dashboard_tpl,
         license_count=len(licenses),
         active_count=active_count,
         expired_count=expired_count,
@@ -322,7 +312,7 @@ def dashboard():
 def licenses():
     licenses = load_json(LICENSES_FILE)
     soon_expiry = [l for l in licenses if l['active'] and datetime.strptime(l['expiry_date'], '%Y-%m-%d') <= datetime.now() + timedelta(days=7)]
-    return render_template_string(licenses_tpl, licenses=licenses, soon_expiry=soon_expiry, layout=layout)
+    return render_with_layout(licenses_tpl, licenses=licenses, soon_expiry=soon_expiry)
 
 @app.route('/licenses/generate', methods=['GET', 'POST'])
 @admin_required
@@ -341,7 +331,7 @@ def generate_license():
         save_json(LICENSES_FILE, licenses)
         flash('License generated!', 'success')
         return redirect(url_for('licenses'))
-    return render_template_string(license_generate_tpl, form=form, layout=layout)
+    return render_with_layout(license_generate_tpl, form=form)
 
 @app.route('/licenses/revoke/<license_key>', methods=['POST'])
 @admin_required
@@ -371,7 +361,7 @@ def tools():
         save_json(TOOLS_FILE, tools)
         flash('Tool added!', 'success')
         return redirect(url_for('tools'))
-    return render_template_string(tools_tpl, form=form, tools=tools, layout=layout)
+    return render_with_layout(tools_tpl, form=form, tools=tools)
 
 @app.route('/tools/update/<tool_name>', methods=['POST'])
 @admin_required
@@ -442,6 +432,5 @@ def docs():
 
 # ====== Main ======
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
