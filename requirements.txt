@@ -1,1 +1,6 @@
-flask
+Flask
+Flask-WTF
+Flask-Limiter
+bcrypt
+PyYAML
+gunicorn
