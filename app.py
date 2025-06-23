@@ -3,20 +3,13 @@ import json
 import uuid
 import bcrypt
 from datetime import datetime, timedelta
-from functools import wraps
 
 from flask import (
-    Flask, render_template_string, request, redirect, url_for, session,
+    Flask, render_template_string, request, redirect, url_for,
     flash, jsonify
 )
 
 # ========= CONFIG ==============
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
-# Generate hash: bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
-ADMIN_PASSWORD_HASH = os.environ.get(
-    'ADMIN_PASSWORD_HASH',
-    '$2b$12$8Ff6dn7m9BkYa0dXx7Hi4uZqOeLQ3wYwppW4k1iM9JkYv3vTezj4q'  # hash for 'admin123'
-).encode()
 SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-secret')
 LICENSES_FILE = 'data/licenses.json'
 TOOLS_FILE = 'data/tools.json'
@@ -89,14 +82,9 @@ BASE_TEMPLATE = """
 </head>
 <body>
     <nav>
-        {% if session.get('admin_logged_in') %}
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('license_admin') }}">Licenses</a>
-            <a href="{{ url_for('tools_admin') }}">Tools</a>
-            <a href="{{ url_for('logout') }}">Logout</a>
-        {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
-        {% endif %}
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('license_admin') }}">Licenses</a>
+        <a href="{{ url_for('tools_admin') }}">Tools</a>
         <a href="{{ url_for('docs') }}">API Docs</a>
     </nav>
     <div class="container">
@@ -126,17 +114,6 @@ def save_json(path, data):
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
 
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get('admin_logged_in'):
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated
-
-def password_check(pw_plain, pw_hash):
-    return bcrypt.checkpw(pw_plain.encode(), pw_hash)
-
 def status_of(lic):
     today = datetime.now().date()
     expiry = datetime.strptime(lic['expiry'], "%Y-%m-%d").date()
@@ -152,43 +129,8 @@ def days_left(lic):
     today = datetime.now().date()
     return (expiry - today).days
 
-# ====== AUTH ======
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if session.get('admin_logged_in'):
-        return redirect(url_for('dashboard'))
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if (
-            username == ADMIN_USERNAME
-            and password_check(password, ADMIN_PASSWORD_HASH)
-        ):
-            session['admin_logged_in'] = True
-            flash('Logged in!', 'success')
-            return redirect(url_for('dashboard'))
-        flash('Invalid credentials', 'danger')
-    login_form = """
-    <h2>Admin Login</h2>
-    <form method="POST">
-        <label>Username:</label><br>
-        <input name="username" required><br>
-        <label>Password:</label><br>
-        <input name="password" type="password" required><br>
-        <button type="submit">Login</button>
-    </form>
-    """
-    return render_template_string(BASE_TEMPLATE, content=login_form)
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('Logged out', 'info')
-    return redirect(url_for('login'))
-
 # ========== DASHBOARD ==========
 @app.route('/')
-@admin_required
 def dashboard():
     licenses = load_json(LICENSES_FILE)
     tools = load_json(TOOLS_FILE)
@@ -275,7 +217,6 @@ def dashboard():
 
 # ========== LICENSE MANAGEMENT ==========
 @app.route('/licenses', methods=['GET', 'POST'])
-@admin_required
 def license_admin():
     licenses = load_json(LICENSES_FILE)
     # Generate License
@@ -310,7 +251,7 @@ def license_admin():
     total_pages = max(1, (len(filtered) + per_page - 1) // per_page)
     paginated = filtered[(page-1)*per_page: page*per_page]
     # HTML
-    html = """
+    html = f"""
     <h2>License Management</h2>
     <form method="POST" style="margin-bottom:1.5em; background:#f3f9ff; border-radius:6px; padding:1em 1.5em;">
         <div class="form-row">
@@ -373,7 +314,6 @@ def license_admin():
     return render_template_string(BASE_TEMPLATE, content=html)
 
 @app.route('/licenses/revoke/<key>', methods=['POST'])
-@admin_required
 def license_revoke(key):
     licenses = load_json(LICENSES_FILE)
     for lic in licenses:
@@ -385,7 +325,6 @@ def license_revoke(key):
     return redirect(url_for('license_admin'))
 
 @app.route('/licenses/extend/<key>', methods=['POST'])
-@admin_required
 def license_extend(key):
     new_expiry = request.form['expiry']
     licenses = load_json(LICENSES_FILE)
@@ -469,7 +408,6 @@ def api_extend_license():
 
 # ========== TOOL MANAGEMENT ==========
 @app.route('/tools', methods=['GET', 'POST'])
-@admin_required
 def tools_admin():
     tools = load_json(TOOLS_FILE)
 
@@ -524,7 +462,7 @@ def tools_admin():
     total_pages = max(1, (len(filtered_tools) + per_page - 1) // per_page)
     paginated_tools = filtered_tools[(page-1)*per_page : page*per_page]
 
-    html = """
+    html = f"""
     <h2>Tool Management</h2>
     <form method="POST" style="margin-bottom:2em; background:#f3f9ff; border-radius:6px; padding:1em 1.5em;">
         <div class="form-row">
