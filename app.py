@@ -60,6 +60,30 @@ BASE_TEMPLATE = """
         .pagination a, .pagination span { display: inline-block; padding: 0.3em 0.8em; margin: 0 0.2em; border-radius: 2px; background: #eee; color: #333; text-decoration: none; }
         .pagination .current { background: #1976d2; color: #fff; font-weight: bold; }
         .chart-container { max-width: 600px; margin: 2em auto 0 auto; }
+        input[type="text"], input[type="password"], input[type="date"] {
+            padding: 0.2em 0.4em;
+            border-radius: 2px;
+            border: 1px solid #ccc;
+        }
+        input[type="checkbox"] {
+            transform: scale(1.1);
+        }
+        button, input[type="submit"] {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 2px;
+            padding: 0.4em 1em;
+            margin-right: 0.3em;
+            cursor: pointer;
+        }
+        button:hover, input[type="submit"]:hover {
+            background: #145cab;
+        }
+        @media (max-width: 700px) {
+            .container { padding: 0.5em; }
+            table, th, td { font-size: 0.96em; }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -449,31 +473,61 @@ def api_extend_license():
 @admin_required
 def tools_admin():
     tools = load_json(TOOLS_FILE)
+    msg = ""
+
     # Add tool
-    if request.method == "POST" and "add_tool" in request.form:
-        name = request.form['name']
-        version = request.form['version']
-        url = request.form['download_url']
-        update_required = bool(request.form.get('update_required'))
-        tools.append({
-            "name": name,
-            "version": version,
-            "download_url": url,
-            "update_required": update_required
-        })
-        save_json(TOOLS_FILE, tools)
-        flash('Tool added', 'success')
-        return redirect(url_for('tools_admin'))
+    if request.method == "POST":
+        if "add_tool" in request.form:
+            name = request.form["name"].strip()
+            version = request.form["version"].strip()
+            url = request.form["download_url"].strip()
+            update_required = bool(request.form.get("update_required"))
+            if any(t["name"].lower() == name.lower() for t in tools):
+                flash("Tool already exists", "danger")
+            else:
+                tools.append({
+                    "name": name,
+                    "version": version,
+                    "download_url": url,
+                    "update_required": update_required
+                })
+                save_json(TOOLS_FILE, tools)
+                flash("Tool added", "success")
+            return redirect(url_for('tools_admin'))
+
+        elif "edit_tool" in request.form:
+            # Edit tool
+            old_name = request.form["original_name"]
+            for tool in tools:
+                if tool["name"] == old_name:
+                    tool["name"] = request.form["name"].strip()
+                    tool["version"] = request.form["version"].strip()
+                    tool["download_url"] = request.form["download_url"].strip()
+                    tool["update_required"] = bool(request.form.get("update_required"))
+                    flash("Tool updated", "success")
+                    break
+            save_json(TOOLS_FILE, tools)
+            return redirect(url_for('tools_admin'))
+
+        elif "delete_tool" in request.form:
+            del_name = request.form["delete_tool"]
+            tools = [t for t in tools if t["name"] != del_name]
+            save_json(TOOLS_FILE, tools)
+            flash("Tool deleted", "info")
+            return redirect(url_for('tools_admin'))
+
     # Filter/search
     filter_val = request.args.get("filter", "").strip().lower()
     filtered_tools = tools
     if filter_val:
         filtered_tools = [t for t in tools if filter_val in t['name'].lower() or filter_val in t['version'].lower()]
+
     # Pagination
     page = int(request.args.get("page", 1))
     per_page = 10
     total_pages = max(1, (len(filtered_tools) + per_page - 1) // per_page)
     paginated_tools = filtered_tools[(page-1)*per_page : page*per_page]
+
     # HTML
     html = """
     <h2>Tool Management</h2>
@@ -506,21 +560,19 @@ def tools_admin():
     for tool in paginated_tools:
         html += f"""
         <tr>
-            <td>{tool['name']}</td>
-            <td>{tool['version']}</td>
-            <td><a href="{tool['download_url']}" target="_blank">Download</a></td>
-            <td>{"Yes" if tool.get("update_required") else "No"}</td>
-            <td>
-                <form method="POST" action="{url_for('tool_update', name=tool['name'])}" style="display:inline;">
-                    <input name="version" value="{tool['version']}" required>
-                    <input name="download_url" value="{tool['download_url']}" required>
+            <form method="POST" style="display:inline;">
+                <input type="hidden" name="original_name" value="{tool['name']}">
+                <td><input name="name" value="{tool['name']}" style="width:120px" required></td>
+                <td><input name="version" value="{tool['version']}" style="width:90px" required></td>
+                <td><input name="download_url" value="{tool['download_url']}" style="width:210px" required></td>
+                <td style="text-align:center;">
                     <input type="checkbox" name="update_required" {"checked" if tool.get("update_required") else ""}>
-                    <button type="submit">Update</button>
-                </form>
-                <form method="POST" action="{url_for('tool_delete', name=tool['name'])}" style="display:inline;">
-                    <button type="submit">Delete</button>
-                </form>
-            </td>
+                </td>
+                <td>
+                    <button type="submit" name="edit_tool" value="1">Save</button>
+                    <button type="submit" name="delete_tool" value="{tool['name']}" onclick="return confirm('Delete this tool?')">Delete</button>
+                </td>
+            </form>
         </tr>
         """
     html += "</table>"
@@ -534,52 +586,114 @@ def tools_admin():
     """
     return render_template_string(BASE_TEMPLATE, content=html)
 
-@app.route('/tools/update/<name>', methods=['POST'])
-@admin_required
-def tool_update(name):
-    version = request.form['version']
-    url_dl = request.form['download_url']
-    update_required = bool(request.form.get('update_required'))
-    tools = load_json(TOOLS_FILE)
-    for tool in tools:
-        if tool['name'] == name:
-            tool['version'] = version
-            tool['download_url'] = url_dl
-            tool['update_required'] = update_required
-    save_json(TOOLS_FILE, tools)
-    flash('Tool updated', 'success')
-    return redirect(url_for('tools_admin'))
-
-@app.route('/tools/delete/<name>', methods=['POST'])
-@admin_required
-def tool_delete(name):
-    tools = load_json(TOOLS_FILE)
-    tools = [t for t in tools if t['name'] != name]
-    save_json(TOOLS_FILE, tools)
-    flash('Tool deleted', 'info')
-    return redirect(url_for('tools_admin'))
-
 # ========== TOOL API ==========
 @app.route('/api/tools', methods=['GET'])
 def api_get_tools():
     tools = load_json(TOOLS_FILE)
     return jsonify({'tools': tools})
 
+@app.route('/api/tool/<name>', methods=['GET'])
+def api_get_tool_by_name(name):
+    tools = load_json(TOOLS_FILE)
+    for tool in tools:
+        if tool['name'].lower() == name.lower():
+            return jsonify(tool)
+    return jsonify({'error': 'Tool not found'}), 404
+
 # ========== API DOCS ==========
 @app.route('/docs')
 def docs():
-    doc = """
+    # Example data for API documentation
+    docs_html = """
     <h2>API Documentation</h2>
     <ul>
-        <li><b>POST /api/license/generate</b>: Generate license. <br>Body: {"device_id","version","expiry"}</li>
-        <li><b>POST /api/license/check</b>: Check license validity. <br>Body: {"key","device_id","version"}</li>
-        <li><b>POST /api/license/revoke</b>: Revoke license. <br>Body: {"key"}</li>
-        <li><b>POST /api/license/extend</b>: Extend license. <br>Body: {"key","expiry"}</li>
-        <li><b>GET /api/tools</b>: Get all tools info.</li>
+        <li><b>POST /api/license/generate</b><br>
+            <b>Request:</b>
+            <pre>{
+    "device_id": "device-123",
+    "version": "1.0.0",
+    "expiry": "2025-12-31"
+}</pre>
+            <b>Response:</b>
+            <pre>{
+    "key": "LICENSEKEY1234567890"
+}</pre>
+        </li>
+        <li><b>POST /api/license/check</b><br>
+            <b>Request:</b>
+            <pre>{
+    "key": "LICENSEKEY1234567890",
+    "device_id": "device-123",
+    "version": "1.0.0"
+}</pre>
+            <b>Response (valid):</b>
+            <pre>{
+    "status": "valid",
+    "days_left": 90,
+    "expiry": "2025-12-31"
+}</pre>
+            <b>Response (expired):</b>
+            <pre>{
+    "status": "expired"
+}</pre>
+            <b>Response (device mismatch):</b>
+            <pre>{
+    "status": "device_mismatch"
+}</pre>
+        </li>
+        <li><b>POST /api/license/revoke</b><br>
+            <b>Request:</b>
+            <pre>{
+    "key": "LICENSEKEY1234567890"
+}</pre>
+            <b>Response:</b>
+            <pre>{
+    "status": "revoked"
+}</pre>
+        </li>
+        <li><b>POST /api/license/extend</b><br>
+            <b>Request:</b>
+            <pre>{
+    "key": "LICENSEKEY1234567890",
+    "expiry": "2026-12-31"
+}</pre>
+            <b>Response:</b>
+            <pre>{
+    "status": "extended"
+}</pre>
+        </li>
+        <li><b>GET /api/tools</b><br>
+            <b>Response:</b>
+            <pre>{
+    "tools": [
+        {
+            "name": "ToolA",
+            "version": "1.0.0",
+            "download_url": "https://example.com/ToolA.zip",
+            "update_required": false
+        }
+    ]
+}</pre>
+        </li>
+        <li><b>GET /api/tool/&lt;name&gt;</b><br>
+            <i>Returns a single tool by name (case-insensitive)</i><br>
+            <b>Example:</b> <code>/api/tool/ToolA</code><br>
+            <b>Response:</b>
+            <pre>{
+    "name": "ToolA",
+    "version": "1.0.0",
+    "download_url": "https://example.com/ToolA.zip",
+    "update_required": false
+}</pre>
+            <b>Not found:</b>
+            <pre>{
+    "error": "Tool not found"
+}</pre>
+        </li>
     </ul>
-    <p>All APIs are JSON. Use <code>Content-Type: application/json</code>.</p>
+    <p>All APIs use JSON. Always set <code>Content-Type: application/json</code> in your requests.</p>
     """
-    return render_template_string(BASE_TEMPLATE, content=doc)
+    return render_template_string(BASE_TEMPLATE, content=docs_html)
 
 # ========== MAIN ==========
 if __name__ == "__main__":
