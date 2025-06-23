@@ -7,7 +7,7 @@ from functools import wraps
 
 from flask import (
     Flask, render_template_string, request, redirect, url_for, session,
-    flash, jsonify, send_file
+    flash, jsonify
 )
 
 # ========= CONFIG ==============
@@ -15,7 +15,7 @@ ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 # Generate hash: bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
 ADMIN_PASSWORD_HASH = os.environ.get(
     'ADMIN_PASSWORD_HASH',
-    b'$2b$12$8Ff6dn7m9BkYa0dXx7Hi4uZqOeLQ3wYwppW4k1iM9JkYv3vTezj4q'  # hash for 'admin123'
+    '$2b$12$8Ff6dn7m9BkYa0dXx7Hi4uZqOeLQ3wYwppW4k1iM9JkYv3vTezj4q'  # hash for 'admin123'
 ).encode()
 SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-secret')
 LICENSES_FILE = 'data/licenses.json'
@@ -157,7 +157,6 @@ def days_left(lic):
 def login():
     if session.get('admin_logged_in'):
         return redirect(url_for('dashboard'))
-    error = ""
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -473,9 +472,7 @@ def api_extend_license():
 @admin_required
 def tools_admin():
     tools = load_json(TOOLS_FILE)
-    msg = ""
 
-    # Add tool
     if request.method == "POST":
         if "add_tool" in request.form:
             name = request.form["name"].strip()
@@ -496,7 +493,6 @@ def tools_admin():
             return redirect(url_for('tools_admin'))
 
         elif "edit_tool" in request.form:
-            # Edit tool
             old_name = request.form["original_name"]
             for tool in tools:
                 if tool["name"] == old_name:
@@ -528,7 +524,6 @@ def tools_admin():
     total_pages = max(1, (len(filtered_tools) + per_page - 1) // per_page)
     paginated_tools = filtered_tools[(page-1)*per_page : page*per_page]
 
-    # HTML
     html = """
     <h2>Tool Management</h2>
     <form method="POST" style="margin-bottom:2em; background:#f3f9ff; border-radius:6px; padding:1em 1.5em;">
@@ -603,7 +598,6 @@ def api_get_tool_by_name(name):
 # ========== API DOCS ==========
 @app.route('/docs')
 def docs():
-    # Example data for API documentation
     docs_html = """
     <h2>API Documentation</h2>
     <ul>
