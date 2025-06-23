@@ -1,27 +1,29 @@
 import os
 import json
 import uuid
-import bcrypt
 from datetime import datetime, timedelta
-
 from flask import (
     Flask, render_template_string, request, redirect, url_for,
     flash, jsonify
 )
 
-# ========= CONFIG ==============
-SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-secret')
+# =================== CONFIGURATION ===================
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError("You must set the SECRET_KEY environment variable for security!")
+
 LICENSES_FILE = 'data/licenses.json'
 TOOLS_FILE = 'data/tools.json'
 os.makedirs('data', exist_ok=True)
 
-# ===== Flask Setup =====
+# ================ FLASK APP SETUP ====================
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # Set True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
 
-# ===== HTML TEMPLATES =====
+# ================== HTML TEMPLATE ====================
 BASE_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -58,21 +60,12 @@ BASE_TEMPLATE = """
             border-radius: 2px;
             border: 1px solid #ccc;
         }
-        input[type="checkbox"] {
-            transform: scale(1.1);
-        }
+        input[type="checkbox"] { transform: scale(1.1);}
         button, input[type="submit"] {
-            background: #1976d2;
-            color: #fff;
-            border: none;
-            border-radius: 2px;
-            padding: 0.4em 1em;
-            margin-right: 0.3em;
-            cursor: pointer;
+            background: #1976d2; color: #fff; border: none; border-radius: 2px;
+            padding: 0.4em 1em; margin-right: 0.3em; cursor: pointer;
         }
-        button:hover, input[type="submit"]:hover {
-            background: #145cab;
-        }
+        button:hover, input[type="submit"]:hover { background: #145cab; }
         @media (max-width: 700px) {
             .container { padding: 0.5em; }
             table, th, td { font-size: 0.96em; }
@@ -103,7 +96,7 @@ BASE_TEMPLATE = """
 </html>
 """
 
-# ====== Utility Functions ======
+# ================== UTILITY FUNCTIONS =================
 def load_json(path):
     if not os.path.exists(path):
         return []
@@ -129,7 +122,7 @@ def days_left(lic):
     today = datetime.now().date()
     return (expiry - today).days
 
-# ========== DASHBOARD ==========
+# ===================== DASHBOARD ======================
 @app.route('/')
 def dashboard():
     licenses = load_json(LICENSES_FILE)
@@ -215,11 +208,10 @@ def dashboard():
         """
     return render_template_string(BASE_TEMPLATE, content=dashboard_html)
 
-# ========== LICENSE MANAGEMENT ==========
+# ================ LICENSE MANAGEMENT ==================
 @app.route('/licenses', methods=['GET', 'POST'])
 def license_admin():
     licenses = load_json(LICENSES_FILE)
-    # Generate License
     if request.method == "POST" and "generate" in request.form:
         device_id = request.form['device_id']
         version = request.form['version']
@@ -237,7 +229,6 @@ def license_admin():
         save_json(LICENSES_FILE, licenses)
         flash(f'License {key} created', 'success')
         return redirect(url_for('license_admin'))
-    # Search/filter
     q = request.args.get('q', '').lower()
     status_filter = request.args.get('status', '')
     filtered = licenses
@@ -245,12 +236,10 @@ def license_admin():
         filtered = [lic for lic in filtered if q in lic['device_id'].lower() or q in lic['key'].lower()]
     if status_filter:
         filtered = [lic for lic in filtered if status_of(lic).lower() == status_filter.lower()]
-    # Pagination
     page = int(request.args.get('page', 1))
     per_page = 15
     total_pages = max(1, (len(filtered) + per_page - 1) // per_page)
     paginated = filtered[(page-1)*per_page: page*per_page]
-    # HTML
     html = f"""
     <h2>License Management</h2>
     <form method="POST" style="margin-bottom:1.5em; background:#f3f9ff; border-radius:6px; padding:1em 1.5em;">
@@ -294,7 +283,7 @@ def license_admin():
             <td>{st}</td>
             <td>{days_left(lic) if st=='Active' else 'Expired' if st=='Expired' else 'N/A'}</td>
             <td>
-                {'<form method="POST" action="'+url_for('license_revoke', key=lic['key'])+'" style="display:inline"><button type="submit">Revoke</button></form>' if lic.get('active', True) else ''}
+                {'<form method="POST" action="'+url_for('license_revoke', key=lic['key'])+'" style="display:inline"><button type="submit">Revoke</button></form>' if lic.get('active', True) else '[Revoked]'}
                 <form method="POST" action="{url_for('license_extend', key=lic['key'])}" style="display:inline">
                     <input type="date" name="expiry" required>
                     <button type="submit">Extend</button>
@@ -336,7 +325,7 @@ def license_extend(key):
     flash('License extended', 'success')
     return redirect(url_for('license_admin'))
 
-# ========== LICENSE API ==========
+# ==================== LICENSE API =====================
 @app.route('/api/license/generate', methods=['POST'])
 def api_generate_license():
     data = request.get_json(force=True)
@@ -406,11 +395,10 @@ def api_extend_license():
     save_json(LICENSES_FILE, licenses)
     return jsonify({'status': 'extended'})
 
-# ========== TOOL MANAGEMENT ==========
+# ================== TOOL MANAGEMENT ===================
 @app.route('/tools', methods=['GET', 'POST'])
 def tools_admin():
     tools = load_json(TOOLS_FILE)
-
     if request.method == "POST":
         if "add_tool" in request.form:
             name = request.form["name"].strip()
@@ -429,7 +417,6 @@ def tools_admin():
                 save_json(TOOLS_FILE, tools)
                 flash("Tool added", "success")
             return redirect(url_for('tools_admin'))
-
         elif "edit_tool" in request.form:
             old_name = request.form["original_name"]
             for tool in tools:
@@ -442,26 +429,20 @@ def tools_admin():
                     break
             save_json(TOOLS_FILE, tools)
             return redirect(url_for('tools_admin'))
-
         elif "delete_tool" in request.form:
             del_name = request.form["delete_tool"]
             tools = [t for t in tools if t["name"] != del_name]
             save_json(TOOLS_FILE, tools)
             flash("Tool deleted", "info")
             return redirect(url_for('tools_admin'))
-
-    # Filter/search
     filter_val = request.args.get("filter", "").strip().lower()
     filtered_tools = tools
     if filter_val:
         filtered_tools = [t for t in tools if filter_val in t['name'].lower() or filter_val in t['version'].lower()]
-
-    # Pagination
     page = int(request.args.get("page", 1))
     per_page = 10
     total_pages = max(1, (len(filtered_tools) + per_page - 1) // per_page)
     paginated_tools = filtered_tools[(page-1)*per_page : page*per_page]
-
     html = f"""
     <h2>Tool Management</h2>
     <form method="POST" style="margin-bottom:2em; background:#f3f9ff; border-radius:6px; padding:1em 1.5em;">
@@ -519,7 +500,7 @@ def tools_admin():
     """
     return render_template_string(BASE_TEMPLATE, content=html)
 
-# ========== TOOL API ==========
+# ===================== TOOL API =======================
 @app.route('/api/tools', methods=['GET'])
 def api_get_tools():
     tools = load_json(TOOLS_FILE)
@@ -533,7 +514,7 @@ def api_get_tool_by_name(name):
             return jsonify(tool)
     return jsonify({'error': 'Tool not found'}), 404
 
-# ========== API DOCS ==========
+# ===================== API DOCS =======================
 @app.route('/docs')
 def docs():
     docs_html = """
@@ -627,6 +608,6 @@ def docs():
     """
     return render_template_string(BASE_TEMPLATE, content=docs_html)
 
-# ========== MAIN ==========
+# ===================== MAIN ===========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
